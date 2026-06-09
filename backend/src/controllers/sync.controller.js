@@ -352,7 +352,7 @@ const push = async (req, res, next) => {
           }
         }
       }
-    });
+    }, { maxWait: 10000, timeout: 60000 });
 
     console.log('[SYNC PUSH] Transação concluída com sucesso:', resumo);
     res.status(200).json({ success: true });
