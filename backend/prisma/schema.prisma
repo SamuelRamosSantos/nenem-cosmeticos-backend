@@ -1,0 +1,300 @@
+// =============================================================================
+// Nenem Cosméticos — schema.prisma
+// Arquitetura Offline-First com suporte a WatermelonDB
+//
+// Mudanças v2:
+//   - Pessoa.tipo       : enum TipoPessoa removido → String ('C' | 'F')
+//   - Produto.tipo_baixa: enum TipoBaixa removido  → String ('I' | 'M')
+//   - Produto.marca_id  : obrigatório → opcional (String?)
+//   - Produto: + movimenta_estoque Boolean, + ativo Boolean
+//   - Marca:   + ativo Boolean
+//   - VendaHeader: + data_venda DateTime?
+// =============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// USUÁRIOS — autenticação local sincronizada via WatermelonDB
+// senha: texto puro por ora; migrar para hash (bcrypt) antes de produção
+// =============================================================================
+model Usuario {
+  id         String   @id @default(uuid())
+  nome       String
+  senha      String
+  ativo      Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  @@map("usuarios")
+}
+
+// =============================================================================
+// PESSOAS (clientes e fornecedores)
+// tipo: 'C' = Cliente | 'F' = Fornecedor
+// =============================================================================
+model Pessoa {
+  id         String   @id @default(uuid())
+  nome       String
+  telefone   String?
+  tipo       String   // 'C' (Cliente) | 'F' (Fornecedor)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  compras               CompraHeader[]
+  vendas                VendaHeader[]
+  estoque_movimentacoes EstoqueMovimentacao[]
+
+  @@map("pessoas")
+}
+
+// =============================================================================
+// MARCAS
+// ativo: false = inativada (soft delete de negócio, preserva histórico)
+// =============================================================================
+model Marca {
+  id                  String   @id @default(uuid())
+  nome                String
+  percentual_comissao Decimal  @db.Decimal(5, 2)
+  ativo               Boolean  @default(true)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+  deleted             Boolean  @default(false)
+
+  produtos Produto[]
+
+  @@map("marcas")
+}
+
+// =============================================================================
+// FORMAS DE PAGAMENTO
+// =============================================================================
+model FormaPagamento {
+  id         String   @id @default(uuid())
+  descricao  String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  vendas_pagamentos  VendaPagamento[]
+  compras_pagamentos CompraPagamento[]
+
+  @@map("formas_pagamento")
+}
+
+// =============================================================================
+// PRODUTOS
+// tipo_baixa     : 'I' = Individual (baixa próprio estoque)
+//                  'M' = Mestre/Kit  (baixa itens do kit vinculados)
+// movimenta_estoque: false = produto não movimenta estoque em vendas/ajustes
+// ativo          : false = produto inativado (soft delete de negócio)
+// marca_id       : opcional — produto pode existir sem marca
+// =============================================================================
+model Produto {
+  id                 String   @id @default(uuid())
+  descricao          String
+  marca_id           String?  // opcional — sem FK obrigatória
+  preco_venda        Decimal  @db.Decimal(10, 2)
+  custo_preco        Decimal  @db.Decimal(10, 2)
+  cod_barras         String?
+  codigo_interno     String?
+  tipo_baixa         String   @default("I")  // 'I' | 'M'
+  qtd_estoque        Decimal  @default(0)    @db.Decimal(10, 3)
+  movimenta_estoque  Boolean  @default(true)
+  ativo              Boolean  @default(true)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  deleted            Boolean  @default(false)
+
+  marca                     Marca?                @relation(fields: [marca_id], references: [id])
+  kit_itens_como_mestre     ProdutoKitItem[]      @relation("KitMestre")
+  kit_itens_como_individual ProdutoKitItem[]      @relation("KitIndividual")
+  estoque_movimentacoes     EstoqueMovimentacao[]
+  vendas_itens              VendaItem[]
+  compras_itens             CompraItem[]
+
+  @@map("produtos")
+}
+
+// =============================================================================
+// PRODUTO KIT ITENS
+// =============================================================================
+model ProdutoKitItem {
+  id                    String   @id @default(uuid())
+  produto_mestre_id     String
+  produto_individual_id String
+  quantidade_necessaria Decimal  @db.Decimal(10, 3)
+  created_at            DateTime @default(now())
+  updated_at            DateTime @updatedAt
+  deleted               Boolean  @default(false)
+
+  produto_mestre     Produto @relation("KitMestre",     fields: [produto_mestre_id],     references: [id])
+  produto_individual Produto @relation("KitIndividual", fields: [produto_individual_id], references: [id])
+
+  @@unique([produto_mestre_id, produto_individual_id])
+  @@map("produto_kit_itens")
+}
+
+// =============================================================================
+// ESTOQUE MOVIMENTAÇÕES
+// =============================================================================
+model EstoqueMovimentacao {
+  id                String           @id @default(uuid())
+  produto_id        String
+  tipo_movimentacao TipoMovimentacao
+  quantidade        Decimal          @db.Decimal(10, 3)
+  referencia_id     String?
+  pessoa_id         String?
+  data_movimentacao DateTime         @default(now())
+  created_at        DateTime         @default(now())
+  updated_at        DateTime         @updatedAt
+  deleted           Boolean          @default(false)
+
+  produto Produto @relation(fields: [produto_id], references: [id])
+  pessoa  Pessoa? @relation(fields: [pessoa_id],  references: [id])
+
+  @@map("estoque_movimentacoes")
+}
+
+enum TipoMovimentacao {
+  entrada_compra
+  saida_venda
+  ajuste_positivo
+  ajuste_negativo
+  devolucao_cliente
+  devolucao_fornecedor
+}
+
+// =============================================================================
+// VENDAS (header)
+// data_venda: data real da transação — permite lançamento retroativo do PDV
+// =============================================================================
+model VendaHeader {
+  id         String      @id @default(uuid())
+  cliente_id String?
+  status     StatusVenda @default(aberta)
+  total      Decimal     @db.Decimal(10, 2)
+  data_venda DateTime?   // nullable: registros antigos preservados
+  created_at DateTime    @default(now())
+  updated_at DateTime    @updatedAt
+  deleted    Boolean     @default(false)
+
+  cliente    Pessoa?          @relation(fields: [cliente_id], references: [id])
+  itens      VendaItem[]
+  pagamentos VendaPagamento[]
+
+  @@map("vendas")
+}
+
+enum StatusVenda {
+  aberta
+  finalizada
+  cancelada
+}
+
+// =============================================================================
+// VENDAS ITENS
+// =============================================================================
+model VendaItem {
+  id                     String   @id @default(uuid())
+  venda_id               String
+  produto_id             String
+  quantidade             Decimal  @db.Decimal(10, 3)
+  preco_unitario         Decimal  @db.Decimal(10, 2)
+  custo_unitario_gravado Decimal  @db.Decimal(10, 2)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+  deleted                Boolean  @default(false)
+
+  venda   VendaHeader @relation(fields: [venda_id],   references: [id])
+  produto Produto     @relation(fields: [produto_id], references: [id])
+
+  @@map("vendas_itens")
+}
+
+// =============================================================================
+// VENDAS PAGAMENTOS
+// =============================================================================
+model VendaPagamento {
+  id                 String   @id @default(uuid())
+  venda_id           String
+  forma_pagamento_id String
+  valor              Decimal  @db.Decimal(10, 2)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  deleted            Boolean  @default(false)
+
+  venda           VendaHeader    @relation(fields: [venda_id],           references: [id])
+  forma_pagamento FormaPagamento @relation(fields: [forma_pagamento_id], references: [id])
+
+  @@map("vendas_pagamentos")
+}
+
+// =============================================================================
+// COMPRAS (header)
+// =============================================================================
+model CompraHeader {
+  id            String       @id @default(uuid())
+  fornecedor_id String?
+  status        StatusCompra @default(aberta)
+  total         Decimal      @db.Decimal(10, 2)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
+  deleted       Boolean      @default(false)
+
+  fornecedor Pessoa?           @relation(fields: [fornecedor_id], references: [id])
+  itens      CompraItem[]
+  pagamentos CompraPagamento[]
+
+  @@map("compras")
+}
+
+enum StatusCompra {
+  aberta
+  finalizada
+  cancelada
+}
+
+// =============================================================================
+// COMPRAS ITENS
+// =============================================================================
+model CompraItem {
+  id             String   @id @default(uuid())
+  compra_id      String
+  produto_id     String
+  quantidade     Decimal  @db.Decimal(10, 3)
+  custo_unitario Decimal  @db.Decimal(10, 2)
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+  deleted        Boolean  @default(false)
+
+  compra  CompraHeader @relation(fields: [compra_id],  references: [id])
+  produto Produto      @relation(fields: [produto_id], references: [id])
+
+  @@map("compras_itens")
+}
+
+// =============================================================================
+// COMPRAS PAGAMENTOS
+// =============================================================================
+model CompraPagamento {
+  id                 String   @id @default(uuid())
+  compra_id          String
+  forma_pagamento_id String
+  valor              Decimal  @db.Decimal(10, 2)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+  deleted            Boolean  @default(false)
+
+  compra          CompraHeader   @relation(fields: [compra_id],          references: [id])
+  forma_pagamento FormaPagamento @relation(fields: [forma_pagamento_id], references: [id])
+
+  @@map("compras_pagamentos")
+}
