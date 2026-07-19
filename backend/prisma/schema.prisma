@@ -103,7 +103,7 @@ model Produto {
   marca_id           String?  // opcional — sem FK obrigatória
   preco_venda        Decimal  @db.Decimal(10, 2)
   custo_preco        Decimal  @db.Decimal(10, 2)
-  cod_barras         String?
+  cod_barras         String?  @unique
   codigo_interno     String?
   tipo_baixa         String   @default("I")  // 'I' | 'M'
   qtd_estoque        Decimal  @default(0)    @db.Decimal(10, 3)
