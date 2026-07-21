@@ -13,16 +13,8 @@ const prisma = require('../lib/prisma');
 // de conversão para/de Date no Prisma.
 // =============================================================================
 const TABLE_CONFIG = {
-  // Tabela de usuários — sincronizada para permitir login offline no app
-  // O app só faz PULL desta tabela; edições de senha/usuário via backend/seed.
-  usuarios: {
-    model: 'usuario',
-    dateFields: ['created_at', 'updated_at'],
-    allowedFields: [
-      'id', 'nome', 'senha', 'ativo',
-      'created_at', 'updated_at', 'deleted',
-    ],
-  },
+  // 'usuarios' não sincroniza mais (NC-68 refeito): autenticação é sempre em
+  // nuvem via /api/auth/login e /api/usuarios, sem cópia local da senha.
 
   pessoas: {
     model: 'pessoa',
@@ -140,9 +132,7 @@ const TABLE_CONFIG = {
 };
 
 // Ordem de escrita no push respeita FK constraints (pais antes de filhos).
-// usuarios não tem FK — posicionado primeiro para evitar dependências.
 const PUSH_ORDER = [
-  'usuarios',
   'pessoas', 'marcas', 'formas_pagamento',
   'produtos', 'produto_kit_itens',
   'vendas', 'compras',

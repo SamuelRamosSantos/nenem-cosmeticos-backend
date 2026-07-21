@@ -2,6 +2,7 @@ const { Router } = require('express');
 const autenticar = require('../middlewares/auth.middleware');
 
 const authRoutes              = require('./auth.routes');
+const usuariosRoutes          = require('./usuarios.routes');
 const pessoasRoutes           = require('./pessoas.routes');
 const marcasRoutes            = require('./marcas.routes');
 const formasPagamentoRoutes   = require('./formasPagamento.routes');
@@ -13,12 +14,12 @@ const syncRoutes              = require('./sync.routes');
 
 const router = Router();
 
-// Público — login (NC-67) e sync (o app mobile ainda não envia token; ver NC-68/69)
+// Só o login fica público — todo o resto exige JWT, incluindo /sync
+// (o app sempre tem um token salvo depois do login; ver NC-67/68/69).
 router.use('/auth', authRoutes);
-router.use('/sync', syncRoutes);
 
-// Protegidas por JWT — uso administrativo/externo (não fazem parte do fluxo
-// de escrita do app, que é sempre local-first; ver SKILL 1 do projeto)
+router.use('/sync',             autenticar, syncRoutes);
+router.use('/usuarios',         autenticar, usuariosRoutes);
 router.use('/pessoas',          autenticar, pessoasRoutes);
 router.use('/marcas',           autenticar, marcasRoutes);
 router.use('/formas-pagamento', autenticar, formasPagamentoRoutes);
