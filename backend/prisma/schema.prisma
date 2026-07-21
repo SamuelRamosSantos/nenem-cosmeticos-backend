@@ -79,14 +79,42 @@ model Marca {
 model FormaPagamento {
   id         String   @id @default(uuid())
   descricao  String
+  tipo       String   @default("V") // 'V' = À vista | 'C' = Cartão | 'P' = A prazo
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
   deleted    Boolean  @default(false)
 
+  // NC-72 — só usados quando tipo = 'P' (a prazo)
+  intervalo_dias           Int?
+  limite_parcelas          Int?
+  juros_percentual_padrao  Decimal? @db.Decimal(5, 2)
+
   vendas_pagamentos  VendaPagamento[]
   compras_pagamentos CompraPagamento[]
+  taxas_cartao       FormaPagamentoTaxa[]
 
   @@map("formas_pagamento")
+}
+
+// =============================================================================
+// TAXAS DE CARTÃO (NC-71) — só existem para formas_pagamento com tipo = 'C'.
+// Débito: sempre 1 linha (parcelas = 1). Crédito: até 18 linhas (parcelas 1-18).
+// =============================================================================
+model FormaPagamentoTaxa {
+  id                 String  @id @default(uuid())
+  forma_pagamento_id String
+  modalidade         String  // 'D' = Débito | 'C' = Crédito
+  parcelas           Int     // 1 para Débito; 1 a 18 para Crédito
+  taxa_percentual    Decimal @db.Decimal(5, 2)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  forma_pagamento FormaPagamento @relation(fields: [forma_pagamento_id], references: [id])
+
+  @@unique([forma_pagamento_id, modalidade, parcelas])
+  @@map("forma_pagamento_taxas")
 }
 
 // =============================================================================

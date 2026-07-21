@@ -38,7 +38,19 @@ const TABLE_CONFIG = {
     model: 'formaPagamento',
     dateFields: ['created_at', 'updated_at'],
     allowedFields: [
-      'id', 'descricao',
+      'id', 'descricao', 'tipo',
+      'intervalo_dias', 'limite_parcelas', 'juros_percentual_padrao',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
+
+  // NC-71 — taxas de cartão (Débito/Crédito por parcela), só existem para
+  // formas_pagamento com tipo = 'C'.
+  forma_pagamento_taxas: {
+    model: 'formaPagamentoTaxa',
+    dateFields: ['created_at', 'updated_at'],
+    allowedFields: [
+      'id', 'forma_pagamento_id', 'modalidade', 'parcelas', 'taxa_percentual',
       'created_at', 'updated_at', 'deleted',
     ],
   },
@@ -133,7 +145,7 @@ const TABLE_CONFIG = {
 
 // Ordem de escrita no push respeita FK constraints (pais antes de filhos).
 const PUSH_ORDER = [
-  'pessoas', 'marcas', 'formas_pagamento',
+  'pessoas', 'marcas', 'formas_pagamento', 'forma_pagamento_taxas',
   'produtos', 'produto_kit_itens',
   'vendas', 'compras',
   'vendas_itens', 'vendas_pagamentos',
