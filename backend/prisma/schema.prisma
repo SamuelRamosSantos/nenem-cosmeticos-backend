@@ -51,6 +51,7 @@ model Pessoa {
   compras               CompraHeader[]
   vendas                VendaHeader[]
   estoque_movimentacoes EstoqueMovimentacao[]
+  titulos               Titulo[]
 
   @@map("pessoas")
 }
@@ -92,6 +93,7 @@ model FormaPagamento {
   vendas_pagamentos  VendaPagamento[]
   compras_pagamentos CompraPagamento[]
   taxas_cartao       FormaPagamentoTaxa[]
+  titulos_baixas     TituloBaixa[]
 
   @@map("formas_pagamento")
 }
@@ -217,6 +219,7 @@ model VendaHeader {
   cliente    Pessoa?          @relation(fields: [cliente_id], references: [id])
   itens      VendaItem[]
   pagamentos VendaPagamento[]
+  titulos    Titulo[]
 
   @@map("vendas")
 }
@@ -325,4 +328,61 @@ model CompraPagamento {
   forma_pagamento FormaPagamento @relation(fields: [forma_pagamento_id], references: [id])
 
   @@map("compras_pagamentos")
+}
+
+// =============================================================================
+// TÍTULOS (Contas a Receber) — NC-73/74/75
+//
+// Gerados na finalização da venda:
+//   - tipo À vista/Cartão (NC-74): 1 único título, já com baixa automática
+//     na data do dia (titulos_baixas).
+//   - tipo A Prazo (NC-75): N títulos (1 por parcela, parcelas_total = N),
+//     juros aplicado uma vez sobre o total e dividido igualmente entre as
+//     parcelas; todos nascem com status "Aberto". Exige cliente_id na venda.
+// =============================================================================
+model Titulo {
+  id                String   @id @default(uuid())
+  venda_id          String
+  cliente_id        String?
+  parcela_numero    Int      @default(1) // ex.: 1 em "1/3"
+  parcelas_total    Int      @default(1) // ex.: 3 em "1/3"
+  valor_original    Decimal  @db.Decimal(10, 2)
+  valor_taxa_cartao Decimal  @db.Decimal(10, 2) @default(0)
+  valor_liquido     Decimal  @db.Decimal(10, 2)
+  data_vencimento   DateTime
+  status            String   @default("Aberto") // 'Aberto' | 'Baixado' | 'Parcial'
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  venda   VendaHeader   @relation(fields: [venda_id],   references: [id])
+  cliente Pessoa?       @relation(fields: [cliente_id], references: [id])
+  baixas  TituloBaixa[]
+
+  @@map("titulos")
+}
+
+// =============================================================================
+// TÍTULOS BAIXAS (recebimentos) — NC-78
+//
+// Só aceita forma_pagamento de tipo 'V' (à vista) ou 'C' (cartão) — não dá
+// pra "pagar uma dívida com outra dívida" (validado em financeiroService.js
+// no app / financeiro.controller.js no backend, não como CHECK de banco).
+// =============================================================================
+model TituloBaixa {
+  id                 String   @id @default(uuid())
+  titulo_id          String
+  forma_pagamento_id String
+  valor_pago         Decimal  @db.Decimal(10, 2)
+  data_baixa         DateTime
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  deleted    Boolean  @default(false)
+
+  titulo          Titulo         @relation(fields: [titulo_id],          references: [id])
+  forma_pagamento FormaPagamento @relation(fields: [forma_pagamento_id], references: [id])
+
+  @@map("titulos_baixas")
 }

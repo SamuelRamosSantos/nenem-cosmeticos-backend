@@ -141,6 +141,28 @@ const TABLE_CONFIG = {
       'created_at', 'updated_at', 'deleted',
     ],
   },
+
+  // NC-73/74/75 — títulos gerados na finalização da venda.
+  titulos: {
+    model: 'titulo',
+    dateFields: ['created_at', 'updated_at', 'data_vencimento'],
+    allowedFields: [
+      'id', 'venda_id', 'cliente_id', 'parcela_numero', 'parcelas_total',
+      'valor_original', 'valor_taxa_cartao', 'valor_liquido',
+      'data_vencimento', 'status',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
+
+  // NC-78 — recebimentos contra um título.
+  titulos_baixas: {
+    model: 'tituloBaixa',
+    dateFields: ['created_at', 'updated_at', 'data_baixa'],
+    allowedFields: [
+      'id', 'titulo_id', 'forma_pagamento_id', 'valor_pago', 'data_baixa',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
 };
 
 // Ordem de escrita no push respeita FK constraints (pais antes de filhos).
@@ -151,6 +173,7 @@ const PUSH_ORDER = [
   'vendas_itens', 'vendas_pagamentos',
   'compras_itens', 'compras_pagamentos',
   'estoque_movimentacoes',
+  'titulos', 'titulos_baixas',
 ];
 
 // =============================================================================
