@@ -149,7 +149,7 @@ const TABLE_CONFIG = {
     allowedFields: [
       'id', 'venda_id', 'cliente_id', 'parcela_numero', 'parcelas_total',
       'valor_original', 'valor_taxa_cartao', 'valor_liquido',
-      'data_vencimento', 'status',
+      'data_vencimento', 'status', 'reclassificado',
       'created_at', 'updated_at', 'deleted',
     ],
   },
@@ -159,7 +159,8 @@ const TABLE_CONFIG = {
     model: 'tituloBaixa',
     dateFields: ['created_at', 'updated_at', 'data_baixa'],
     allowedFields: [
-      'id', 'titulo_id', 'forma_pagamento_id', 'valor_pago', 'data_baixa',
+      'id', 'titulo_id', 'forma_pagamento_id', 'valor_pago',
+      'valor_desconto', 'valor_juros', 'valor_taxa_cartao', 'data_baixa',
       'created_at', 'updated_at', 'deleted',
     ],
   },

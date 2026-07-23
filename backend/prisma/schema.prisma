@@ -351,6 +351,7 @@ model Titulo {
   valor_liquido     Decimal  @db.Decimal(10, 2)
   data_vencimento   DateTime
   status            String   @default("Aberto") // 'Aberto' | 'Baixado' | 'Parcial'
+  reclassificado    Boolean  @default(false) // true se a forma de pagamento foi alterada num estorno (ver estornarBaixa)
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -375,6 +376,9 @@ model TituloBaixa {
   titulo_id          String
   forma_pagamento_id String
   valor_pago         Decimal  @db.Decimal(10, 2)
+  valor_desconto     Decimal  @db.Decimal(10, 2) @default(0) // NC-77
+  valor_juros        Decimal  @db.Decimal(10, 2) @default(0) // NC-77 — juros/mora
+  valor_taxa_cartao  Decimal  @db.Decimal(10, 2) @default(0) // taxa da adquirente descontada nessa baixa (cartão)
   data_baixa         DateTime
 
   created_at DateTime @default(now())
