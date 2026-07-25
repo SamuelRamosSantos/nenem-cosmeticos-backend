@@ -13,16 +13,8 @@ const prisma = require('../lib/prisma');
 // de conversão para/de Date no Prisma.
 // =============================================================================
 const TABLE_CONFIG = {
-  // Tabela de usuários — sincronizada para permitir login offline no app
-  // O app só faz PULL desta tabela; edições de senha/usuário via backend/seed.
-  usuarios: {
-    model: 'usuario',
-    dateFields: ['created_at', 'updated_at'],
-    allowedFields: [
-      'id', 'nome', 'senha', 'ativo',
-      'created_at', 'updated_at', 'deleted',
-    ],
-  },
+  // 'usuarios' não sincroniza mais (NC-68 refeito): autenticação é sempre em
+  // nuvem via /api/auth/login e /api/usuarios, sem cópia local da senha.
 
   pessoas: {
     model: 'pessoa',
@@ -46,7 +38,19 @@ const TABLE_CONFIG = {
     model: 'formaPagamento',
     dateFields: ['created_at', 'updated_at'],
     allowedFields: [
-      'id', 'descricao',
+      'id', 'descricao', 'tipo',
+      'intervalo_dias', 'limite_parcelas', 'juros_percentual_padrao',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
+
+  // NC-71 — taxas de cartão (Débito/Crédito por parcela), só existem para
+  // formas_pagamento com tipo = 'C'.
+  forma_pagamento_taxas: {
+    model: 'formaPagamentoTaxa',
+    dateFields: ['created_at', 'updated_at'],
+    allowedFields: [
+      'id', 'forma_pagamento_id', 'modalidade', 'parcelas', 'taxa_percentual',
       'created_at', 'updated_at', 'deleted',
     ],
   },
@@ -137,18 +141,40 @@ const TABLE_CONFIG = {
       'created_at', 'updated_at', 'deleted',
     ],
   },
+
+  // NC-73/74/75 — títulos gerados na finalização da venda.
+  titulos: {
+    model: 'titulo',
+    dateFields: ['created_at', 'updated_at', 'data_vencimento'],
+    allowedFields: [
+      'id', 'venda_id', 'cliente_id', 'parcela_numero', 'parcelas_total',
+      'valor_original', 'valor_taxa_cartao', 'valor_liquido',
+      'data_vencimento', 'status', 'reclassificado',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
+
+  // NC-78 — recebimentos contra um título.
+  titulos_baixas: {
+    model: 'tituloBaixa',
+    dateFields: ['created_at', 'updated_at', 'data_baixa'],
+    allowedFields: [
+      'id', 'titulo_id', 'forma_pagamento_id', 'valor_pago',
+      'valor_desconto', 'valor_juros', 'valor_taxa_cartao', 'data_baixa',
+      'created_at', 'updated_at', 'deleted',
+    ],
+  },
 };
 
 // Ordem de escrita no push respeita FK constraints (pais antes de filhos).
-// usuarios não tem FK — posicionado primeiro para evitar dependências.
 const PUSH_ORDER = [
-  'usuarios',
-  'pessoas', 'marcas', 'formas_pagamento',
+  'pessoas', 'marcas', 'formas_pagamento', 'forma_pagamento_taxas',
   'produtos', 'produto_kit_itens',
   'vendas', 'compras',
   'vendas_itens', 'vendas_pagamentos',
   'compras_itens', 'compras_pagamentos',
   'estoque_movimentacoes',
+  'titulos', 'titulos_baixas',
 ];
 
 // =============================================================================

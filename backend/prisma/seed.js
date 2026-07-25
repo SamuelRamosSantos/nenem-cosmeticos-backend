@@ -6,17 +6,16 @@
 //   (ou) node prisma/seed.js
 //
 // O que cria:
-//   - Usuário admin padrão (admin / 1234) se ainda não existir
+//   - Usuário admin padrão (admin / 1234, senha com hash bcrypt) se ainda
+//     não existir
 //   - Formas de pagamento padrão se a tabela estiver vazia
-//
-// ATENÇÃO: senha em texto puro apenas para desenvolvimento/debug.
-//          Migre para bcrypt antes de colocar em produção.
 // =============================================================================
 
 require('dotenv').config();
 const { Pool } = require('pg');
 const { PrismaPg } = require('@prisma/adapter-pg');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
 
 // 1. Cria a conexão usando o driver oficial
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -31,8 +30,9 @@ async function seedUsuarios() {
     console.log('  ✓ Usuário admin já existe — pulando.');
     return;
   }
+  const senhaHash = await bcrypt.hash('1234', 10);
   await prisma.usuario.create({
-    data: { nome: 'admin', senha: '1234', ativo: true },
+    data: { nome: 'admin', senha: senhaHash, ativo: true },
   });
   console.log('  ✓ Usuário admin criado (admin / 1234).');
 }
