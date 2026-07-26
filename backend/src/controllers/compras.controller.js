@@ -1,4 +1,6 @@
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 const listar = async (req, res, next) => {
   try {
@@ -7,12 +9,23 @@ const listar = async (req, res, next) => {
     if (status) where.status = status;
     if (fornecedor_id) where.fornecedor_id = fornecedor_id;
 
-    const compras = await prisma.compraHeader.findMany({
-      where,
-      include: { fornecedor: true, itens: { include: { produto: true } }, pagamentos: { include: { forma_pagamento: true } } },
-      orderBy: { created_at: 'desc' },
+    const { page, pageSize, skip, take, orderBy } = parsePagination(req.query, {
+      defaultSortBy: 'created_at',
+      allowedSortBy: ['created_at', 'total'],
+      defaultSortOrder: 'desc',
     });
-    res.json(compras);
+
+    const [compras, total] = await Promise.all([
+      prisma.compraHeader.findMany({
+        where,
+        include: { fornecedor: true, itens: { include: { produto: true } }, pagamentos: { include: { forma_pagamento: true } } },
+        orderBy,
+        skip,
+        take,
+      }),
+      prisma.compraHeader.count({ where }),
+    ]);
+    res.json({ data: compras, pagination: buildPaginationMeta({ page, pageSize, total }) });
   } catch (err) {
     next(err);
   }
@@ -28,7 +41,7 @@ const buscarPorId = async (req, res, next) => {
         pagamentos: { where: { deleted: false }, include: { forma_pagamento: true } },
       },
     });
-    if (!compra) return res.status(404).json({ error: 'Compra não encontrada.' });
+    if (!compra) throw new ApiError(404, 'Compra não encontrada.', 'NOT_FOUND');
     res.json(compra);
   } catch (err) {
     next(err);
@@ -51,12 +64,12 @@ const adicionarItem = async (req, res, next) => {
   try {
     const { produto_id, quantidade, custo_unitario } = req.body;
     if (!produto_id || quantidade == null || custo_unitario == null) {
-      return res.status(400).json({ error: 'Os campos produto_id, quantidade e custo_unitario são obrigatórios.' });
+      throw new ApiError(400, 'Os campos produto_id, quantidade e custo_unitario são obrigatórios.', 'VALIDATION_ERROR');
     }
 
     const compra = await prisma.compraHeader.findFirst({ where: { id: req.params.id, deleted: false } });
-    if (!compra) return res.status(404).json({ error: 'Compra não encontrada.' });
-    if (compra.status !== 'aberta') return res.status(400).json({ error: 'Só é possível adicionar itens em compras abertas.' });
+    if (!compra) throw new ApiError(404, 'Compra não encontrada.', 'NOT_FOUND');
+    if (compra.status !== 'aberta') throw new ApiError(400, 'Só é possível adicionar itens em compras abertas.', 'VALIDATION_ERROR');
 
     const item = await prisma.$transaction(async (tx) => {
       const novoItem = await tx.compraItem.create({
@@ -88,8 +101,8 @@ const finalizar = async (req, res, next) => {
       where: { id: req.params.id, deleted: false },
       include: { itens: { where: { deleted: false } } },
     });
-    if (!compra) return res.status(404).json({ error: 'Compra não encontrada.' });
-    if (compra.status !== 'aberta') return res.status(400).json({ error: 'Compra já foi finalizada ou cancelada.' });
+    if (!compra) throw new ApiError(404, 'Compra não encontrada.', 'NOT_FOUND');
+    if (compra.status !== 'aberta') throw new ApiError(400, 'Compra já foi finalizada ou cancelada.', 'VALIDATION_ERROR');
 
     const compraFinalizada = await prisma.$transaction(async (tx) => {
       for (const item of compra.itens) {

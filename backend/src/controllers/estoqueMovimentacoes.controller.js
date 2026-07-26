@@ -1,4 +1,6 @@
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 const listar = async (req, res, next) => {
   try {
@@ -7,12 +9,23 @@ const listar = async (req, res, next) => {
     if (produto_id) where.produto_id = produto_id;
     if (tipo_movimentacao) where.tipo_movimentacao = tipo_movimentacao;
 
-    const movimentacoes = await prisma.estoqueMovimentacao.findMany({
-      where,
-      include: { produto: true, pessoa: true },
-      orderBy: { data_movimentacao: 'desc' },
+    const { page, pageSize, skip, take, orderBy } = parsePagination(req.query, {
+      defaultSortBy: 'data_movimentacao',
+      allowedSortBy: ['data_movimentacao', 'created_at', 'quantidade'],
+      defaultSortOrder: 'desc',
     });
-    res.json(movimentacoes);
+
+    const [movimentacoes, total] = await Promise.all([
+      prisma.estoqueMovimentacao.findMany({
+        where,
+        include: { produto: true, pessoa: true },
+        orderBy,
+        skip,
+        take,
+      }),
+      prisma.estoqueMovimentacao.count({ where }),
+    ]);
+    res.json({ data: movimentacoes, pagination: buildPaginationMeta({ page, pageSize, total }) });
   } catch (err) {
     next(err);
   }
@@ -24,7 +37,7 @@ const buscarPorId = async (req, res, next) => {
       where: { id: req.params.id, deleted: false },
       include: { produto: true, pessoa: true },
     });
-    if (!mov) return res.status(404).json({ error: 'Movimentação não encontrada.' });
+    if (!mov) throw new ApiError(404, 'Movimentação não encontrada.', 'NOT_FOUND');
     res.json(mov);
   } catch (err) {
     next(err);
@@ -38,10 +51,10 @@ const criarAjuste = async (req, res, next) => {
 
     const tiposAjuste = ['ajuste_positivo', 'ajuste_negativo'];
     if (!tiposAjuste.includes(tipo_movimentacao)) {
-      return res.status(400).json({ error: 'Para ajustes manuais use: ajuste_positivo ou ajuste_negativo.' });
+      throw new ApiError(400, 'Para ajustes manuais use: ajuste_positivo ou ajuste_negativo.', 'VALIDATION_ERROR');
     }
     if (!produto_id || quantidade == null) {
-      return res.status(400).json({ error: 'Os campos produto_id e quantidade são obrigatórios.' });
+      throw new ApiError(400, 'Os campos produto_id e quantidade são obrigatórios.', 'VALIDATION_ERROR');
     }
 
     const movimentacao = await prisma.$transaction(async (tx) => {

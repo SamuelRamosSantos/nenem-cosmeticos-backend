@@ -3,6 +3,9 @@ const ctrl = require('../controllers/vendas.controller');
 
 const router = Router();
 
+// NC-106 — dedicado à web, precisa vir antes de '/:id' pra não colidir com o param.
+router.post('/web/finalizar',            ctrl.finalizarWeb);
+
 router.get('/',                          ctrl.listar);
 router.get('/:id',                       ctrl.buscarPorId);
 router.post('/',                         ctrl.criar);

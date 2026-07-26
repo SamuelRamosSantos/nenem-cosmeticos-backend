@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
 
 // Nunca inclui "senha" na resposta — a tela de gestão de usuários fala
 // direto com essas rotas (sem cópia local, ver NC-68).
@@ -30,17 +31,17 @@ const criar = async (req, res, next) => {
   try {
     const { nome, senha } = req.body;
     if (!nome?.trim() || !senha) {
-      return res.status(400).json({ error: 'Os campos nome e senha são obrigatórios.' });
+      throw new ApiError(400, 'Os campos nome e senha são obrigatórios.', 'VALIDATION_ERROR');
     }
     if (!REGEX_SENHA_FORTE.test(senha)) {
-      return res.status(400).json({ error: MENSAGEM_REGRA_SENHA });
+      throw new ApiError(400, MENSAGEM_REGRA_SENHA, 'VALIDATION_ERROR');
     }
 
     const duplicado = await prisma.usuario.findFirst({
       where: { deleted: false, nome: { equals: nome.trim(), mode: 'insensitive' } },
     });
     if (duplicado) {
-      return res.status(409).json({ error: 'Já existe um usuário com este nome.' });
+      throw new ApiError(409, 'Já existe um usuário com este nome.', 'DUPLICATE');
     }
 
     const senhaHash = await bcrypt.hash(senha, 10);
@@ -64,7 +65,7 @@ const atualizar = async (req, res, next) => {
 
     if (nome !== undefined) {
       if (!nome.trim()) {
-        return res.status(400).json({ error: 'O nome não pode ficar vazio.' });
+        throw new ApiError(400, 'O nome não pode ficar vazio.', 'VALIDATION_ERROR');
       }
       const duplicado = await prisma.usuario.findFirst({
         where: {
@@ -74,14 +75,14 @@ const atualizar = async (req, res, next) => {
         },
       });
       if (duplicado) {
-        return res.status(409).json({ error: 'Já existe um usuário com este nome.' });
+        throw new ApiError(409, 'Já existe um usuário com este nome.', 'DUPLICATE');
       }
       data.nome = nome.trim();
     }
 
     if (senha) {
       if (!REGEX_SENHA_FORTE.test(senha)) {
-        return res.status(400).json({ error: MENSAGEM_REGRA_SENHA });
+        throw new ApiError(400, MENSAGEM_REGRA_SENHA, 'VALIDATION_ERROR');
       }
       data.senha = await bcrypt.hash(senha, 10);
     }

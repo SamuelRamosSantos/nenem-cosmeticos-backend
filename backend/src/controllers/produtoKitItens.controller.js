@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
 
 const listarPorMestre = async (req, res, next) => {
   try {
@@ -16,13 +17,14 @@ const adicionar = async (req, res, next) => {
   try {
     const { produto_mestre_id, produto_individual_id, quantidade_necessaria } = req.body;
     if (!produto_mestre_id || !produto_individual_id || quantidade_necessaria == null) {
-      return res.status(400).json({ error: 'Os campos produto_mestre_id, produto_individual_id e quantidade_necessaria são obrigatórios.' });
+      throw new ApiError(400, 'Os campos produto_mestre_id, produto_individual_id e quantidade_necessaria são obrigatórios.', 'VALIDATION_ERROR');
     }
 
     const mestre = await prisma.produto.findFirst({ where: { id: produto_mestre_id, deleted: false } });
-    if (!mestre) return res.status(404).json({ error: 'Produto mestre não encontrado.' });
-    if (mestre.tipo_baixa !== 'mestre') {
-      return res.status(400).json({ error: 'O produto informado não é do tipo mestre.' });
+    if (!mestre) throw new ApiError(404, 'Produto mestre não encontrado.', 'NOT_FOUND');
+    // tipo_baixa usa 'M' (mestre/kit) | 'I' (individual) — não a palavra "mestre" por extenso.
+    if (mestre.tipo_baixa !== 'M') {
+      throw new ApiError(400, 'O produto informado não é do tipo mestre.', 'VALIDATION_ERROR');
     }
 
     const item = await prisma.produtoKitItem.create({

@@ -1,12 +1,21 @@
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 const listar = async (req, res, next) => {
   try {
-    const formas = await prisma.formaPagamento.findMany({
-      where: { deleted: false },
-      orderBy: { descricao: 'asc' },
+    const where = { deleted: false };
+
+    const { page, pageSize, skip, take, orderBy } = parsePagination(req.query, {
+      defaultSortBy: 'descricao',
+      allowedSortBy: ['descricao', 'created_at'],
     });
-    res.json(formas);
+
+    const [formas, total] = await Promise.all([
+      prisma.formaPagamento.findMany({ where, orderBy, skip, take }),
+      prisma.formaPagamento.count({ where }),
+    ]);
+    res.json({ data: formas, pagination: buildPaginationMeta({ page, pageSize, total }) });
   } catch (err) {
     next(err);
   }
@@ -17,7 +26,7 @@ const buscarPorId = async (req, res, next) => {
     const forma = await prisma.formaPagamento.findFirst({
       where: { id: req.params.id, deleted: false },
     });
-    if (!forma) return res.status(404).json({ error: 'Forma de pagamento não encontrada.' });
+    if (!forma) throw new ApiError(404, 'Forma de pagamento não encontrada.', 'NOT_FOUND');
     res.json(forma);
   } catch (err) {
     next(err);
@@ -28,7 +37,7 @@ const criar = async (req, res, next) => {
   try {
     const { descricao } = req.body;
     if (!descricao) {
-      return res.status(400).json({ error: 'O campo descricao é obrigatório.' });
+      throw new ApiError(400, 'O campo descricao é obrigatório.', 'VALIDATION_ERROR');
     }
     const forma = await prisma.formaPagamento.create({ data: { descricao } });
     res.status(201).json(forma);

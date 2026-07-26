@@ -1,20 +1,22 @@
 const jwt = require('jsonwebtoken');
+const ApiError = require('../utils/apiError');
 
-// Protege rotas administrativas exigindo "Authorization: Bearer <token>".
-// Não é aplicado em /sync — o app mobile ainda não envia token (NC-68/69).
+// Exige "Authorization: Bearer <token>" em toda rota exceto /auth — incluindo
+// /sync (ver routes/index.js, a fonte confiável; o app mobile já envia token
+// desde NC-67/68/69, apesar do que comentários antigos deste arquivo diziam).
 function autenticar(req, res, next) {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
 
   if (!token) {
-    return res.status(401).json({ error: 'Token não informado.' });
+    return next(new ApiError(401, 'Token não informado.', 'UNAUTHORIZED'));
   }
 
   try {
     req.usuario = jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Token inválido ou expirado.' });
+    return next(new ApiError(401, 'Token inválido ou expirado.', 'UNAUTHORIZED'));
   }
 }
 

@@ -1,21 +1,21 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
 
 // =============================================================================
 // POST /api/auth/login
 //
-// Autenticação em nuvem (NC-67) — hoje usada apenas para acesso administrativo
-// ao backend (Postman/futuro painel web). O app mobile continua com login
-// 100% local (AuthContext.js); embutir esse token no fluxo do app é o NC-68/69,
-// ainda não implementado.
+// Autenticação em nuvem (NC-67), único endpoint público (ver routes/index.js).
+// Usada pelo login do app mobile (AuthContext.js, 100% em nuvem desde
+// NC-68/69) e será reusada pelo login web (NC-99/NC-112) sem alteração.
 // =============================================================================
 const login = async (req, res, next) => {
   try {
     const { nome, senha } = req.body;
 
     if (!nome || !senha) {
-      return res.status(400).json({ error: 'Informe usuário e senha.' });
+      throw new ApiError(400, 'Informe usuário e senha.', 'VALIDATION_ERROR');
     }
 
     const usuario = await prisma.usuario.findFirst({
@@ -27,12 +27,12 @@ const login = async (req, res, next) => {
     });
 
     if (!usuario) {
-      return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+      throw new ApiError(401, 'Usuário ou senha incorretos.', 'UNAUTHORIZED');
     }
 
     const senhaValida = await bcrypt.compare(senha, usuario.senha);
     if (!senhaValida) {
-      return res.status(401).json({ error: 'Usuário ou senha incorretos.' });
+      throw new ApiError(401, 'Usuário ou senha incorretos.', 'UNAUTHORIZED');
     }
 
     const token = jwt.sign(

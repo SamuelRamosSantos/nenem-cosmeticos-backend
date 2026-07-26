@@ -1,4 +1,6 @@
 const prisma = require('../lib/prisma');
+const ApiError = require('../utils/apiError');
+const { parsePagination, buildPaginationMeta } = require('../utils/pagination');
 
 const listar = async (req, res, next) => {
   try {
@@ -7,12 +9,16 @@ const listar = async (req, res, next) => {
     if (tipo_baixa) where.tipo_baixa = tipo_baixa;
     if (marca_id) where.marca_id = marca_id;
 
-    const produtos = await prisma.produto.findMany({
-      where,
-      include: { marca: true },
-      orderBy: { descricao: 'asc' },
+    const { page, pageSize, skip, take, orderBy } = parsePagination(req.query, {
+      defaultSortBy: 'descricao',
+      allowedSortBy: ['descricao', 'preco_venda', 'custo_preco', 'qtd_estoque', 'created_at'],
     });
-    res.json(produtos);
+
+    const [produtos, total] = await Promise.all([
+      prisma.produto.findMany({ where, include: { marca: true }, orderBy, skip, take }),
+      prisma.produto.count({ where }),
+    ]);
+    res.json({ data: produtos, pagination: buildPaginationMeta({ page, pageSize, total }) });
   } catch (err) {
     next(err);
   }
@@ -30,7 +36,7 @@ const buscarPorId = async (req, res, next) => {
         },
       },
     });
-    if (!produto) return res.status(404).json({ error: 'Produto não encontrado.' });
+    if (!produto) throw new ApiError(404, 'Produto não encontrado.', 'NOT_FOUND');
     res.json(produto);
   } catch (err) {
     next(err);
@@ -41,7 +47,7 @@ const criar = async (req, res, next) => {
   try {
     const { descricao, marca_id, preco_venda, custo_preco, cod_barras, codigo_interno, tipo_baixa } = req.body;
     if (!descricao || !marca_id || preco_venda == null || custo_preco == null) {
-      return res.status(400).json({ error: 'Os campos descricao, marca_id, preco_venda e custo_preco são obrigatórios.' });
+      throw new ApiError(400, 'Os campos descricao, marca_id, preco_venda e custo_preco são obrigatórios.', 'VALIDATION_ERROR');
     }
     const produto = await prisma.produto.create({
       data: { descricao, marca_id, preco_venda, custo_preco, cod_barras, codigo_interno, tipo_baixa },
