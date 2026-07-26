@@ -2,6 +2,7 @@ require('dotenv/config');
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 
 const routes = require('./routes');
 const errorHandler = require('./middlewares/errorHandler');
@@ -32,13 +33,16 @@ app.use(cors({
     if (process.env.NODE_ENV !== 'production' && DEV_ORIGINS.includes(origin)) return callback(null, true);
     return callback(new ApiError(403, `Origem não permitida pelo CORS: ${origin}`, 'FORBIDDEN_ORIGIN'));
   },
-  // Sem credentials: true por enquanto — o JWT viaja via header Authorization,
-  // não cookie. Revisar se a NC-113 (armazenamento do token) optar por cookie httpOnly.
+  // credentials:true (NC-113/NC-99) — a web agora guarda o JWT num cookie
+  // httpOnly, então o navegador precisa ter permissão de enviar cookies
+  // cross-site. Só é seguro porque a whitelist acima nunca usa '*'.
+  credentials: true,
 }));
 
 // AUMENTANDO O LIMITE DE TAMANHO DA REQUISIÇÃO PARA 50MB 👇
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
 
 // Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
